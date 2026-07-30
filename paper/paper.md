@@ -70,258 +70,323 @@ authors_short: 'Toyofumi Fujiwara \\emph{et al.}'
 
 # Abstract
 
-Whole-genome and whole-exome sequencing can produce tens of thousands of variants for a single individual, while only a small number are plausible candidates for a rare or undiagnosed disease. The practical bottleneck is therefore not limited to variant calling. It also includes evidence-aware prioritization, integration of phenotype and inheritance information, multidisciplinary expert review, and reuse of prior interpretations. These challenges are amplified in Asia, where genomic resources, clinical workflows, population-frequency datasets, and governance requirements vary among countries and institutions.
+Genome and exome sequencing can identify tens of thousands of variants in a single rare disease case, but only a small subset can be reviewed in depth by a multidisciplinary expert panel. The challenge is not only to filter a Variant Call Format (VCF) file. It is also to integrate population-specific allele frequencies, molecular consequences, inheritance, phenotype, literature and functional evidence; preserve uncertainty and reviewer reasoning; and enable knowledge gained in one institution or country to be reused elsewhere without centralizing identifiable patient data.
 
-During MedHackathon Asia 2026, Team 3 developed a framework for collaborative rare disease variant review across Asia. The proposed architecture connects three stages: (1) local annotation and prioritization of variants from WGS/WES data, reducing a large VCF to approximately 10-20 candidates; (2) structured review of the highest-priority candidates in a restricted expert-board workspace using ACMG/AMP-style evidence; and (3) controlled sharing of de-identified, reusable variant-level evidence and expert-reviewed annotations. Patient-identifiable data remain within the originating institution, while shareable knowledge is separated into explicitly governed information objects.
+At MedHackathon Asia 2026, participants developed the design of a collaborative rare disease variant review network across Asia. The work was organized into three connected workstreams: variant prioritization and ACMG/AMP-style evidence preparation; phenotype extraction and expert validation; and secure expert-review system design. The proposed workflow retains the full VCF and clinical record in a local or trusted environment, produces a structured shortlist of approximately 10-20 candidate variants, and transfers only the information required for authorized review. Experts then assess a smaller set of high-priority variants, record accepted, rejected and pending evidence, preserve individual positions and dissent, and generate a review outcome. Reusable, appropriately governed variant-level evidence can subsequently be shared across institutions and countries.
 
-The framework builds on ExpertBoard, an experimental prototype that supports case-specific review rooms, multidisciplinary roles, evidence and decision tracking, and human-governed final interpretation. Hackathon discussions comparing phenotype-driven clinical workflows and population-based variant evaluation highlighted their complementarity: regional allele-frequency observations can inform clinical review, while phenotype-supported expert assessments can improve the interpretation of variants previously classified as uncertain.
+The hackathon clarified which interpretation tasks may be automated, which should be semi-automated with mandatory confirmation, and which depend primarily on clinical or family-level judgment. It also identified regional differences in population resources, clinical-data availability, interpretation practice, language and data-access constraints. System requirements were specified for cloud deployment, OpenID Connect authentication, per-case roles, authorization, conflict-safe concurrent editing, individual consensus tracking and detailed audit logging. The existing ExpertBoard prototype provides an initial foundation but does not yet implement the complete review workflow.
 
-This report describes the motivation, architecture, information boundaries, prototype scope, and implementation roadmap. The current work is a design and early-prototype report; no clinical performance or diagnostic utility has yet been established. Future work will focus on harmonized prioritization profiles, interoperable evidence models, multicountry pilot panels, side-by-side comparison of country-specific reviews, and governance for sustainable regional knowledge sharing.
+This report presents the resulting architecture, requirements and implementation roadmap. It is a design and early-prototype report rather than a clinical validation study. Future work will include reproducible workflow comparisons, structured evidence exchange, multicountry pilot panels, evaluation of inter-panel agreement and disagreement, and governance mechanisms that support regional collaboration while preserving local responsibility.
 
 # Introduction
 
-Rare and undiagnosed disease analysis commonly begins with whole-genome sequencing (WGS) or whole-exome sequencing (WES), followed by variant calling and the generation of a Variant Call Format (VCF) file. A single case may contain tens of thousands of small variants before detailed filtering. Even after basic technical and frequency filters, many candidate variants may remain, particularly when phenotype data are incomplete, inheritance is uncertain, or existing databases contain limited evidence for the patient's ancestry.
+Rare and undiagnosed disease analysis increasingly uses whole-genome sequencing (WGS) or whole-exome sequencing (WES). After alignment and variant calling, a case may contain tens of thousands of single-nucleotide and small insertion/deletion variants, and potentially additional copy-number, structural, repeat and mitochondrial variants. The clinically relevant task is therefore to move from a large technical call set to a small, explainable group of candidates that can be reviewed in the context of a patient's phenotype, family history and disease mechanism.
 
-Variant interpretation is supported by resources such as the Genome Aggregation Database (gnomAD), ClinVar, ClinGen, the Ensembl Variant Effect Predictor (VEP), the Human Phenotype Ontology (HPO), and Online Mendelian Inheritance in Man (OMIM) [@Karczewski:2020; @Landrum:2025; @Rehm:2015; @McLaren:2016; @Kohler:2021; @Amberger:2015]. The ACMG/AMP framework provides a widely used structure for combining evidence toward variant classification, and subsequent ClinGen work has refined the interpretation and weighting of individual criteria [@Richards:2015; @Tavtigian:2018]. Nevertheless, interpretation remains dependent on disease context, transcript and variant representation, phenotype quality, segregation, functional evidence, expert judgment, and the population resources available to the reviewing laboratory.
+Variant interpretation is supported by resources such as gnomAD, ClinVar, ClinGen, the Ensembl Variant Effect Predictor (VEP), the Human Phenotype Ontology (HPO) and Online Mendelian Inheritance in Man (OMIM) [@Karczewski:2020; @Landrum:2025; @Rehm:2015; @McLaren:2016; @Kohler:2021; @Amberger:2015]. The ACMG/AMP framework provides a widely used structure for combining evidence toward pathogenic, likely pathogenic, uncertain, likely benign or benign classifications [@Richards:2015]. Subsequent work has refined individual criteria, introduced quantitative interpretations of evidence strength and calibrated computational evidence [@Tavtigian:2018; @Pejaver:2022]. These developments enable greater consistency, but they do not eliminate the need for expert judgment.
 
-Asian populations remain unevenly represented in commonly used genomic resources. Studies of ancestrally diverse Asian genomes have shown both ancestry-specific clinically relevant variants and variants whose interpretation may change when additional regional observations become available [@Chan:2022]. MedHackathon Asia was established to strengthen practical collaboration in genomic and health data across the region. The 2026 meeting emphasized interoperable workflows, population-aware interpretation, federated and secure research environments, and responsible governance [@MedHackathonAsia:2026; @MedHackathonCommunity:2026].
+Population context is especially important. Allele frequencies and disease-associated variants can differ among ancestry groups, while many widely used resources remain uneven in their representation of Asian populations. Singaporean genome studies have demonstrated the value of ancestrally diverse regional cohorts for interpreting clinically relevant variants [@Chan:2022]. Japanese resources such as jMorp and TogoVar provide population and variant information relevant to Japanese cases [@Tadaka:2024; @Mitsuhashi:2022], while T-REx provides a Thai reference exome resource [@Shotelersuk:2021]. These resources are complementary rather than interchangeable. Their availability, access mechanisms, sample composition and clinical context differ.
 
-Against this background, Team 3 discussed a regional platform that links variant prioritization, expert review, and reusable knowledge sharing. The working concept was initially referred to as the *Pan-Asian Variant Review Network*. The intended system is not a centralized authority that replaces local clinical practice. Rather, it is a collaborative research infrastructure through which panels in different countries can review the same variant, preserve their own reasoning and uncertainty, and display their assessments side by side.
+MedHackathon Asia was created as a working forum for practical regional collaboration in genomic and health data. MedHackathon Asia 2026, held in Singapore from 27-31 July 2026, included projects on variant-analysis harmonization, federated environments, population-aware interpretation, genomic data governance and regional resource discovery [@MedHackathonAsia:2026]. It builds on the collaborative framework developed at the first MedHackathon Asia in 2025 [@MedHackathonCommunity:2026].
 
-# Objectives and scope
+During the 2026 meeting, participants proposed a network that connects local variant analysis, phenotype review, multidisciplinary expert assessment and reusable regional knowledge. The objective is not to create a single authority that issues an "Asian" classification. Instead, panels in different countries or institutions should be able to examine the same variant, see the evidence available to other panels, retain their own conclusions and display similarities and differences side by side.
 
-The long-term objective is to create a workflow that can accept genomic and clinical inputs, produce a manageable candidate list, support multidisciplinary expert review, generate a case-oriented report, and retain reusable variant knowledge.
+# Project objectives and design principles
 
-The proposed scope is defined by five principles:
+The long-term objective is to establish an academically governed platform that can:
 
-1. **Post-calling prioritization rather than replacement of variant calling.** The framework begins with a VCF or equivalent variant representation produced by an upstream WGS/WES pipeline.
-2. **Human-governed interpretation.** Automated methods may annotate, rank, and suggest evidence categories, but they do not make the final clinical interpretation.
-3. **Separation of patient data from reusable knowledge.** Patient-identifiable or potentially re-identifiable information remains within the originating institution or an approved restricted environment.
-4. **Preservation of local perspectives.** Country- or institution-specific expert panels can record distinct assessments. The platform should visualize agreement and disagreement without requiring a single regional consensus.
-5. **Progressive implementation.** The immediate work focuses on a practical variant-prioritization prototype and its connection to the existing ExpertBoard application. Full EHR integration, automated phenotype extraction, multicountry federation, and validated reporting are future stages.
+1. accept or reference VCF, phenotype and other case information;
+2. reduce a large call set to a manageable candidate list;
+3. organize ACMG/AMP-style evidence without automatically imposing a final classification;
+4. support multidisciplinary and geographically distributed review;
+5. generate a patient-specific review report within an authorized environment;
+6. retain provenance, reviewer reasoning, uncertainty and audit history; and
+7. share appropriate variant-level evidence and panel assessments across Asia.
 
-# MedHackathon Asia 2026 discussions
+Five design principles guided the hackathon work.
 
-## Comparison of participating workflows
+**Local control of sensitive data.** Full genomic and clinical records remain within the originating institution, a trusted research environment or another approved local infrastructure. The network should exchange the minimum information required for a defined task.
 
-Participants discussed current approaches used in Japanese clinical rare disease analysis and Singaporean research and population-genomics settings. The comparison was not intended to define official national workflows. Instead, it identified complementary resources and recurring implementation differences.
+**Human-governed interpretation.** Automation is used to retrieve, calculate, summarize and propose. Final evidence acceptance and case interpretation remain the responsibility of qualified reviewers.
 
-The Japanese workflow described by participants was primarily clinical and phenotype-driven. Local variant databases, patient phenotype information, disease knowledge, and expert-board discussion were important in reducing and interpreting candidate variants. The Singaporean discussion emphasized standardized and versioned analysis pipelines, VEP-based annotation, local and regional allele-frequency resources, and population-scale cohorts such as SG10K and SG100K. Research cases without detailed phenotype information and clinical cases with phenotype-rich records therefore offered different but complementary evidence.
+**Visible provenance and uncertainty.** Every evidence item should record its source, version, date, scope and reviewer status. Rejected and pending evidence are retained rather than silently removed.
 
-The group identified several reasons why the same starting data could lead to different shortlists:
+**Plurality rather than forced consensus.** The platform records both individual reviewer positions and panel-level outcomes. Country- or institution-specific assessments can remain different when evidence or interpretation differs.
 
-- differences in genome builds, transcript sets, variant normalization, and annotation versions;
-- different population and local-frequency databases;
-- different allele-frequency thresholds and inheritance filters;
-- different handling of splice, loss-of-function, structural, and low-quality variants;
-- incomplete or differently encoded phenotype information;
-- different disease-gene resources and computational prediction tools; and
-- institutional differences in review practice and evidentiary thresholds.
+**Incremental implementation.** Variant prioritization, phenotype review, authentication, expert workflow and regional exchange can be developed as interoperable modules rather than requiring an immediate end-to-end clinical system.
 
-## Agreed hackathon scope
+# Hackathon organization and process
 
-The group concluded that implementing a fully validated end-to-end clinical system during a single hackathon was unrealistic. The near-term focus was therefore narrowed to the variant analysis and prioritization stage, while preserving clear interfaces to phenotype extraction and expert review.
+The work was divided into three connected workstreams (Table 1).
 
-A sample VCF was made available for comparing candidate workflows. The practical next steps were defined as:
+Table 1. Workstreams and principal outputs at MedHackathon Asia 2026.
 
-1. document the annotation and filtering steps used by participating groups;
-2. identify a minimal common annotation profile;
-3. compare the resulting candidate variants;
-4. define a structured package that can be transferred from local prioritization into ExpertBoard; and
-5. specify which reviewed information can later be shared regionally.
+| Workstream | Questions addressed | Principal outputs |
+|---|---|---|
+| Variant prioritization and evidence | How should candidate variants be selected, annotated and mapped to ACMG/AMP-style evidence? Which tasks can be automated? | Input scenarios, evidence matrix, automation boundaries, regional comparison and prioritization requirements |
+| Phenotype review | How should clinical narratives and HPO terms be extracted, corrected and connected to variant evidence? | Prototype phenotype-review workflow, accept/reject/pending states, disease suggestions and missing-information requirements |
+| System design and implementation | How can distributed experts securely review the same case and preserve decisions? | Deployment, authentication, authorization, role, concurrency, consensus and audit-log requirements |
 
-# Proposed system architecture
+The group used discussion-derived workflow descriptions from several participating jurisdictions, an existing ExpertBoard prototype and sample VCF scenarios. No patient-level diagnostic performance study was conducted. Country and institutional descriptions in this report reflect participant discussions and must not be interpreted as official national policy or a comprehensive survey.
 
-Figure 1 summarizes the proposed three-layer architecture. The separation between local, restricted, and shareable environments is a core design requirement rather than only a deployment preference.
+# Integrated workflow architecture
 
-![Figure 1. Proposed workflow from local WGS/WES and phenotype processing to restricted expert review and controlled release of reviewed results. The architecture separates patient-level processing from internet-accessible expert review and public or controlled knowledge sharing.](figures/workflow_architecture.png)
+Figure 1 presents the proposed separation among local analysis, restricted expert review and controlled release.
 
-## Stage 1: local variant annotation and prioritization
+Figure 1. Proposed integrated workflow. Patient-level VCF and clinical notes are processed in an on-premises or trusted environment. A structured shortlist is transferred to an authorized expert-review environment, and only approved, appropriately governed results are released.
 
-The first stage operates within an on-premises environment, trusted research environment, or otherwise approved local infrastructure. Raw reads and upstream variant calling are outside the immediate scope. The input is a VCF or equivalent set of variant calls, normally containing approximately \(10^4\)-\(10^5\) variants for a WGS/WES case depending on scope and preprocessing.
+![Figure 1. Proposed integrated workflow from local analysis to restricted expert review and controlled knowledge release.](figures/integrated_workflow.png)
 
-Candidate variants are annotated and prioritized using a combination of:
+## Local variant and phenotype processing
 
-- genome build, normalized coordinates, reference and alternate alleles;
-- affected gene, transcript, molecular consequence, and predicted loss-of-function status;
-- ClinVar and ClinGen evidence;
-- global, ancestry-specific, local, and regional allele frequencies;
-- disease-gene associations;
-- computational predictions;
-- inheritance model and family structure;
-- variant quality and sequencing context;
-- phenotype relevance based on HPO or related structured terms;
-- literature and functional evidence; and
-- institutional rules or disease-specific criteria.
+The starting point is a VCF generated by an upstream WGS/WES pipeline. Upstream alignment, variant calling and primary quality control are not replaced by this project. The local component performs post-calling normalization, annotation, filtering and prioritization.
 
-Clinical notes may be manually encoded or processed through a phenotype-extraction component to generate candidate HPO and disease terms. Automated phenotype extraction must retain the original text span, provenance, confidence, and reviewer correction because incorrect phenotype abstraction can substantially change ranking.
+The variant workstream proposed several input scenarios to ensure that the system does not assume a single clinical pattern:
 
-The intended output is a structured shortlist of approximately 10-20 candidates. The number is a workflow target, not a fixed clinical rule. The shortlist should preserve excluded and lower-ranked variants, filter reasons, software and database versions, and sufficient provenance to reproduce the prioritization.
+- a single patient with a known phenotype;
+- a single patient with an unknown or incomplete phenotype;
+- multiple patients sharing a phenotype;
+- multiple patients without a shared or known phenotype;
+- a list of variants within one gene;
+- a condition-based multigene analysis; and
+- separate treatment of variant classes for which different evidence rules apply.
 
-## Stage 2: restricted expert-board review
+Candidate annotations include normalized variant identity, genome assembly, transcript, molecular consequence, quality metrics, population frequency, prior clinical assertions, gene-disease association, inheritance, computational predictions, literature, functional evidence and phenotype relevance. The intended output is a shortlist of approximately 10-20 variants. This is an operational target for review, not a universal biological threshold.
 
-The prioritized candidates are transferred to an authenticated expert-review environment. The highest-priority variants, often approximately three for detailed discussion, are reviewed in the context of the case.
+Clinical notes form a parallel path. For the initial prototype, participants recommended accepting precomputed HPO terms rather than attempting unrestricted automated extraction from electronic health records. Future versions may use language models or other natural-language processing methods to propose HPO terms, but each proposal should preserve the supporting text span, confidence and provenance and should remain subject to expert confirmation. PubCaseFinder provides an existing phenotype-driven resource that can support disease and case prioritization [@Fujiwara:2018].
 
-Evidence is organized using ACMG/AMP-style categories, including population evidence, computational evidence, phenotype specificity, segregation, functional evidence, de novo occurrence, allelic data, and prior reports [@Richards:2015]. The system may propose candidate criteria or evidence strengths, but each proposal must remain reviewable. Experts can accept, reject, modify, or leave criteria pending.
+## Restricted expert review
 
-The review workspace should capture:
+The prioritized candidate package is transferred to a secure review environment accessible only to authorized participants. The transfer should contain the minimum phenotype and case context needed for interpretation, together with the full provenance of the prioritization process.
 
-- the evidence item and its source;
-- the criterion and proposed evidence strength;
-- the reviewer who proposed or evaluated it;
-- accepted, rejected, pending, or not-applicable status;
-- written reasoning and uncertainty;
-- conflicting interpretations;
-- requests for additional tests or family studies;
-- the board's current assessment and confidence;
-- timestamps, versions, and audit history; and
-- recommended next steps.
+The expert panel may include a case chair, clinical reviewer, bioinformatician, laboratory scientist, genetic counselor, case coordinator and external consultant. Each role is assigned per case rather than permanently to a user account, because a reviewer may chair one case and advise on another.
 
-A multidisciplinary board may include a case chair, clinical reviewer, bioinformatician, laboratory scientist, genetic counselor, case coordinator, and external consultant. Final decisions remain human-governed. The system should distinguish between an individual reviewer's position, a panel-level summary, and any formal classification issued by an accredited clinical service.
+For each candidate, the workspace should support:
 
-## Stage 3: regional knowledge sharing
+- viewing structured annotations and source versions;
+- proposing ACMG/AMP-style evidence criteria and strengths;
+- accepting, rejecting, modifying or leaving evidence pending;
+- adding literature, functional, segregation and phenotype evidence;
+- recording uncertainty and requests for additional information;
+- storing each reviewer's position and notes;
+- preserving disagreement and abstention;
+- finalizing a panel outcome through an authorized role; and
+- generating an audit-ready report.
 
-The third stage converts appropriate portions of the review into reusable regional knowledge. Two broad information classes were identified.
+The system must distinguish an automated proposal, an individual reviewer's assessment, a panel summary and a formal clinical report issued by an accredited service. These objects have different authority and should not be presented interchangeably.
 
-The first class consists of generally reusable evidence that is independent of a particular patient, including:
+## Controlled regional knowledge sharing
 
-- regional or local frequency observations at an approved aggregation level;
-- literature and functional evidence;
-- gene-disease relevance;
-- transcript and molecular consequence information;
-- prior expert comments that can be de-identified;
-- evidence-code assessments and their provenance; and
-- versioned links to public knowledge resources.
+The final stage creates reusable knowledge objects from reviewed evidence. Two broad information classes were identified.
 
-The second class consists of expert-reviewed variant annotations derived from selected cases. Depending on consent, policy, and re-identification risk, this may include the panel assessment, accepted and rejected criteria, unresolved uncertainty, and recommended evidence needed for re-evaluation. Patient-specific phenotype combinations, family structures, dates, and free text should not be released unless explicitly permitted and adequately governed.
+The first consists of variant-level evidence that is not inherently patient-specific, including population-frequency observations, literature, functional evidence, transcript consequences, gene-disease relationships and evidence-code assessments with provenance.
 
-Shared records should include the reviewing panel or jurisdiction, date, applicable guideline version, evidence sources, and review status. This makes it possible to present Japanese, Singaporean, Indian, and other panel assessments side by side. Differences should be treated as data requiring explanation, not automatically resolved into a single answer.
+The second consists of expert-reviewed annotations derived from cases. Depending on consent, institutional policy and re-identification risk, this may include the panel assessment, accepted and rejected evidence, unresolved questions and recommended conditions for re-evaluation. Patient-specific phenotype combinations, dates, family structures and free text require particular caution because rare disease cases may remain re-identifiable even after removal of direct identifiers.
 
-# ExpertBoard prototype
+A shared record should identify the reviewing panel or jurisdiction, disease context, inheritance model, transcript, guideline version, date, evidence sources and review status. The platform can then show assessments from Japan, Singapore, the Philippines, Thailand and future participating jurisdictions side by side. Differences are treated as informative results that require explanation, not as errors that must automatically be collapsed.
 
-ExpertBoard is an experimental standalone prototype for AI-assisted complex case review [@ExpertBoard:2026]. It provides reusable expert boards organized by gene, disease, or clinical domain and case-specific review rooms in which multidisciplinary experts can evaluate evidence.
+# Variant evidence and the boundary of automation
 
-The current minimum viable product includes:
+A major hackathon output was an explicit separation between evidence tasks that can be automated, tasks that can be computed but require expert confirmation, and tasks that depend primarily on clinical judgment (Table 2).
 
-- expert-board listing and demo-board creation;
-- case-review rooms under a fixed board;
-- phenotype, variant, hypothesis, evidence, history, and briefing views;
-- core and optional support roles;
-- database-backed cases, membership, comments, decisions, and audit logs; and
-- a placeholder for integration with the PubCaseFinder API.
+Table 2. Proposed automation boundary for ACMG/AMP-style evidence preparation.
 
-For this project, ExpertBoard provides the human-review layer between local prioritization and shareable regional knowledge. Future development should add structured ACMG/AMP evidence objects, comparison of panel-specific assessments, explicit uncertainty states, configurable access controls, report templates, and export of de-identified variant-level knowledge.
+| Automation level | Example evidence tasks | Human responsibility |
+|---|---|---|
+| Largely automatable | Variant normalization and type; retrieval of prior assertions; same amino-acid substitutions; calibrated computational predictions; basic transcript consequence; rule-based candidate generation | Verify correct transcript, disease mechanism, tool calibration, data version and applicability |
+| Semi-automated | Loss-of-function assessment; population-frequency thresholds; mutational-domain evidence; functional-study retrieval; case-count or prevalence evidence; in-frame indel assessment | Confirm disease mechanism, inheritance, penetrance, assay validity, independence of cases and appropriate evidence strength |
+| Primarily expert-derived | De novo status; phase and segregation; phenotype specificity; alternative molecular explanations; family relationships; final functional interpretation | Review primary clinical and laboratory data, assess uncertainty and document rationale |
 
-Artificial intelligence may be used for evidence retrieval, literature summarization, phenotype-term suggestions, or candidate criterion suggestions. However, generated content must be linked to source evidence and must not be treated as a final interpretation without expert verification.
+Loss-of-function evidence illustrates the distinction. A tool such as AutoPVS1 can implement a decision framework and produce a preliminary PVS1 assessment [@Xiang:2020], but reviewers must still confirm the relevant transcript, whether loss of function is a known disease mechanism, expected nonsense-mediated decay and other gene- and disease-specific considerations.
 
-# Proposed information model
+Population evidence can be calculated from global and regional databases, but the meaning of an observed frequency depends on disease prevalence, penetrance, inheritance, technical quality and population composition. A locally common variant can appear misleadingly rare in a global dataset, while a variant absent from a regional dataset may simply be insufficiently sampled. Therefore, candidate BA1, BS1, BS2 or PM2 evidence should be proposed with the underlying counts and assumptions, not represented as an unexplained binary flag.
 
-Interoperability requires more than agreement on a user interface. The project proposes three related information packages.
+Computational evidence is suitable for automated display and calibrated evidence suggestions, but correlated predictors must not be counted as independent evidence. ClinGen calibration work provides a basis for assigning computational evidence strengths under defined conditions [@Pejaver:2022]. The system should store the specific model, version, threshold and direction of evidence used.
+
+Family segregation, de novo status and phase are not reliably inferred from a single proband VCF. They require pedigree and sample-relationship validation, parental or relative testing and, where applicable, quantitative segregation assessment. Likewise, phenotype specificity cannot be reduced to a similarity score alone. A clinician must evaluate onset, negative findings, phenocopies, disease mechanism and alternative explanations.
+
+The proposed AI role is consequently assistive. AI may retrieve candidate publications, summarize evidence, propose HPO terms or pre-populate an evidence form. It should not silently create evidence, hide contradictory sources or finalize a classification.
+
+# Phenotype review workflow
+
+Phenotype review is the bridge between the patient's clinical story and variant interpretation. Incomplete or incorrectly encoded phenotypes can cause a causal variant to be ranked too low or can make an incidental variant appear relevant.
+
+The phenotype workstream proposed the following workflow:
+
+1. receive precomputed HPO terms and the clinical text or structured source from which they were derived;
+2. display all candidate phenotype terms with provenance;
+3. allow experts to mark terms as accepted, rejected or pending;
+4. preserve age of onset, severity, temporal course and explicitly absent findings where available;
+5. generate candidate diseases using resources such as OMIM, ClinGen and phenotype-driven tools;
+6. identify missing examinations, tests or family information that would be most informative;
+7. connect the reviewed phenotype profile to candidate genes and variants; and
+8. allow phenotype evidence such as PP4 to be proposed but only applied after clinical confirmation.
+
+Rejected terms should remain visible in the audit history because their removal can materially alter prioritization. Pending terms are also important: a feature may be plausible but unconfirmed, age-dependent or obscured by limited records.
+
+In future versions, language models may assist with extraction from multilingual clinical notes. Such use should be evaluated separately for each language and clinical setting. Extracted terms require source-linked review, and a generated disease suggestion should not be treated as a diagnosis.
+
+# Regional requirements and complementary resources
+
+Hackathon participants compared practical needs in Singapore, Japan, the Philippines and Thailand. Table 3 intentionally summarizes only high-level, discussion-derived characteristics. It is not an authoritative description of national practice.
+
+Table 3. Provisional regional considerations identified in hackathon discussions.
+
+| Consideration | Singapore | Japan | Philippines | Thailand |
+|---|---|---|---|---|
+| Population context | Multi-ancestry population including Chinese, Malay and Indian groups | Predominantly Japanese population with regional substructure | Diverse Filipino and admixed populations | Diverse Thai populations and neighboring ancestry contributions |
+| Examples of population resources | SG10K and PRECISE-SG100K | jMorp and TogoVar | Resources under development or institution-specific | T-REx and participant-reported WGS resources |
+| Commonly identified need | Variant filtering and prioritization across research and clinical contexts | Integration and annotation of domestic variant evidence | Prioritization and development of shareable resources | Prioritization using population-aware frequency data |
+| Clinical phenotype availability | Often differs between research and clinical datasets | Available in some clinical and research collaborations | Frequently limited to internal collaborators or referred testing | Often available primarily for clinical cases |
+| Cross-cutting constraint | Managed access and separation of research from clinical use | Language and integration across domestic resources | Infrastructure and resource maturity | Access, validation and governance requirements |
+
+The comparison highlighted a general pattern. Population cohorts can provide frequency, recurrence and ancestry context but may lack detailed phenotypes. Clinical programs can provide rich phenotype, segregation and disease-mechanism evidence but may have smaller local control datasets. Regional collaboration can connect these complementary forms of evidence without implying that patient-level datasets must be pooled.
+
+Figure 2 illustrates a hypothetical feedback loop. The displayed reclassification is an example only and was not a validated hackathon result.
+
+Figure 2. Conceptual regional feedback loop between population-based variant evaluation and phenotype-driven expert review.
+
+![Figure 2. Conceptual feedback between population cohorts, expert review and a shared variant knowledge resource.](figures/regional_feedback_loop.png)
+
+A variant classified as uncertain in a population dataset may become more interpretable when a clinical panel contributes phenotype, segregation or functional evidence. Conversely, a clinical panel may revise the weight of population evidence when regional frequencies become available. Each panel should independently evaluate the shared evidence and document why its conclusion agrees with or differs from another panel.
+
+# ExpertBoard prototype and review-system requirements
+
+ExpertBoard is an experimental standalone prototype for AI-assisted complex case review [@ExpertBoard:2026]. Its current repository provides reusable boards, case-review rooms, a multidisciplinary role model, phenotype and variant views, and database tables for cases, membership, comments, decisions and audit logs. At the time of the hackathon, the prototype supported viewing boards and cases and creating demonstration content, while the complete authentication and decision workflow remained to be implemented.
+
+The system-design workstream refined the following requirements.
+
+## Deployment and tenancy
+
+Experts need access from different institutions and countries, so the review application should be cloud-hosted or deployed in an equivalently reachable secure environment. This does not imply that full VCFs or clinical records must leave local infrastructure. A single shared application instance is sufficient for an initial pilot; separate institutional deployments and federation can be evaluated later.
+
+## Authentication and future federation
+
+Authentication should be delegated to an established identity provider through OpenID Connect rather than implemented within the application. The proposed initial implementation uses Keycloak [@Keycloak:2026]. Accounts are provisioned by an administrator, sessions must be revocable, repeated failures must be rate-limited and two-factor authentication should be available.
+
+The architecture should not prevent later adoption of GA4GH standards. GA4GH Passports represent machine-readable user roles and permissions through visas [@Voisin:2021], while the Data Use Ontology provides computable terms for permitted data uses [@Lawson:2021]. These standards are relevant to future cross-institutional and cross-border authorization, although they are outside the initial MVP.
+
+## Per-case roles and authorization
+
+Roles are assigned per case. All authorized case participants may read and comment, but structured actions should be restricted. For example, a laboratory scientist may edit functional evidence, a clinical reviewer may validate phenotype evidence and a case chair may move the case through its lifecycle.
+
+The case lifecycle requires a single controlled vocabulary. The hackathon notes identified two partially overlapping status models in the concept and existing code. Resolving these into authoritative states and permitted transitions is a prerequisite for implementation.
+
+Finalizing a panel outcome is a high-stakes action. It should be limited to the case chair or another explicitly authorized role and should require an additional confirmation step. Finalization must not erase individual positions or unresolved evidence.
+
+## Concurrent work
+
+Multiple experts should be able to work on the same case without silently overwriting one another. Full Google-Docs-style co-editing is unnecessary for the MVP because most actions are structured and target separate objects. Optimistic concurrency control or version checks can reject conflicting writes and ask the user to reload or reconcile changes.
+
+Joint editing of free-text minutes could be added later as a separately scoped feature.
+
+## Consensus and dissent
+
+The system must record each core reviewer's position, such as agree, disagree or abstain, together with an optional note. An aggregate vote alone is insufficient. Notes attached to agreement and abstention are as important as formal dissent and must remain available after closure.
+
+"Consensus" should be understood as a recorded panel process, not as a requirement that every reviewer or every country reach the same conclusion. A panel may close a case with no consensus or with a request for additional data.
+
+## Audit logging
+
+Every meaningful write action should record who acted, when, what object changed and the before-and-after values. Login, logout, failed authentication and denied access attempts should also be logged. An entry that merely states "updated" is not sufficient for reconstructing a disputed decision.
+
+Audit records require protection from routine modification and an appropriate retention policy. The audit trail is essential for research reproducibility, security monitoring and any future clinical-quality evaluation.
+
+# Proposed interoperable information objects
+
+The project distinguishes three information packages.
 
 ## Local case package
 
-The local case package can contain identifiable or sensitive data and therefore remains within the responsible institution. It may include the full VCF, pedigree, clinical notes, phenotype timeline, laboratory results, consent metadata, and complete analysis history.
+The local package may contain the complete VCF, pedigree, clinical notes, laboratory results, consent metadata and full analysis history. It remains under the originating institution's governance.
 
 ## Restricted review package
 
-The restricted review package contains only the information required by authorized experts. It includes the candidate shortlist, relevant phenotype terms, inheritance hypotheses, selected supporting documents, analysis provenance, and structured evidence objects. Direct identifiers should be removed wherever they are unnecessary for review.
+The restricted package contains the candidate variants, reviewed phenotype profile, inheritance hypotheses, selected supporting records and analysis provenance required by the panel. Direct identifiers are excluded when unnecessary. Each field should have an explicit access classification.
 
 ## Shareable variant knowledge object
 
-The shareable object is designed for reuse across cases and institutions. A minimal record should include:
+The shareable object is intended for cross-case and cross-institutional reuse. A minimal model is shown in Table 4.
 
-| Category | Proposed fields |
+Table 4. Proposed fields for a shareable variant knowledge object.
+
+| Category | Example fields |
 |---|---|
 | Variant identity | Reference assembly, normalized location and alleles, gene, transcript, HGVS expressions |
-| Disease context | Disease identifier, inheritance mode, gene-disease validity |
-| Evidence | Evidence type, criterion, strength, source identifier, source version, date |
-| Review | Panel or jurisdiction, reviewer role where permitted, status, rationale, confidence |
-| Provenance | Software and database versions, creation time, superseded record, audit reference |
-| Governance | Access level, permitted uses, license or data-use conditions |
-| Uncertainty | Conflicting evidence, unresolved questions, conditions for re-evaluation |
+| Disease context | Disease identifier, inheritance mode, gene-disease validity and mechanism |
+| Evidence | Evidence type, ACMG/AMP-style criterion, strength, source identifier, version and date |
+| Review | Reviewing panel or jurisdiction, status, rationale, confidence and individual positions where permitted |
+| Provenance | Analysis software, database versions, timestamps, creator and superseded record |
+| Uncertainty | Conflicting evidence, rejected and pending criteria, missing data and re-evaluation triggers |
+| Governance | Access tier, permitted use, consent or policy basis, attribution and license or data-use terms |
 
-A shared record should not be interpreted without its disease context, transcript, guideline version, and provenance. Variant-level statements can otherwise be misleading when moved between diseases, inheritance modes, or technical representations.
-
-# Regional feedback model
-
-Figure 2 illustrates a possible feedback loop between population-based variant resources and phenotype-driven expert review. The scenario is conceptual: it does not report an actual reclassification produced during the hackathon.
-
-![Figure 2. Conceptual regional feedback loop. Population-based observations can supply regional frequency and recurrence evidence to a phenotype-driven expert board, while reviewed conclusions can improve a shared variant knowledge resource. The displayed reclassification is illustrative rather than a validated result.](figures/regional_feedback_loop.png)
-
-A variant observed in a population cohort may remain a variant of uncertain significance when phenotype and family evidence are unavailable. Conversely, a clinical case may contain strong phenotype and segregation information but lack sufficient regional frequency context. Linking the two perspectives can identify evidence gaps, prioritize functional studies, and support future re-evaluation.
-
-The platform should not directly import a classification from one panel as a decision for another patient. Instead, it should expose the underlying evidence, context, and provenance so that each panel can perform an independent assessment.
-
-# Governance, privacy, and responsible use
-
-Cross-border genomic collaboration is constrained by differences in privacy law, consent, institutional policy, data-access processes, and technical infrastructure [@MedHackathonCommunity:2026]. The proposed system therefore follows a knowledge-sharing model rather than assuming that patient-level genomes will be centralized.
-
-Key governance requirements include:
-
-- data minimization at each transfer boundary;
-- explicit classification of local, restricted, controlled, and public information;
-- role-based access and auditable actions;
-- retention of consent and permitted-use metadata;
-- institutional and country-specific review before data export;
-- procedures for correction, withdrawal, and superseding interpretations;
-- policies for conflicts of interest and expert-panel membership;
-- clear distinction between research discussion and accredited clinical reporting; and
-- security review for any internet-accessible deployment.
-
-De-identification is not an absolute guarantee of anonymity for rare disease cases. Unusual phenotype combinations, family structures, geographic information, and extremely rare variants may permit re-identification. Consequently, case-derived information should undergo governance review even when conventional direct identifiers have been removed.
+The model should support revision rather than overwriting. A new assessment can supersede an older assessment while retaining the earlier record and the reason for change.
 
 # Hackathon outputs
 
-The work completed or initiated during MedHackathon Asia 2026 included:
+The principal outputs developed or specified during MedHackathon Asia 2026 were:
 
-1. a shared problem statement linking variant prioritization, expert review, and regional knowledge reuse;
-2. a three-layer architecture separating local analysis, restricted review, and controlled release;
-3. identification of complementary Japanese and Singaporean use cases;
-4. definition of the immediate implementation scope around post-calling annotation and prioritization;
-5. an initial ExpertBoard prototype and role model;
-6. a draft distinction between reusable evidence and case-derived expert-reviewed annotations;
-7. a sample VCF and plan for cross-workflow comparison; and
-8. a roadmap toward multicountry expert panels and side-by-side display of their assessments.
+1. an integrated architecture connecting local prioritization, phenotype review, restricted expert assessment and controlled knowledge sharing;
+2. a set of VCF and phenotype input scenarios for prototype testing;
+3. a practical target of reducing a large call set to approximately 10-20 review candidates;
+4. an evidence matrix distinguishing automatable, semi-automated and expert-derived interpretation tasks;
+5. a phenotype-review process with accepted, rejected and pending states;
+6. a provisional comparison of regional resources and workflow constraints;
+7. a per-case expert role model;
+8. requirements for authentication, authorization, concurrency, consensus tracking and audit logging;
+9. a definition of local, restricted and shareable information packages; and
+10. an implementation roadmap connecting the existing ExpertBoard prototype to upstream data processing and future regional exchange.
 
-These are design and prototype outputs. The hackathon did not establish diagnostic performance, inter-laboratory concordance, regulatory compliance, or clinical utility.
+These are design, requirements and early-prototype outputs. The hackathon did not establish clinical validity, diagnostic utility, sensitivity, specificity, inter-laboratory concordance or regulatory compliance.
 
 # Discussion
 
-The proposed framework addresses two connected bottlenecks in rare disease genomics. First, institutions use heterogeneous pipelines and resources to reduce large VCFs to a tractable candidate set. Second, the reasoning generated during expert review is often stored in local reports, email, slide decks, or unstructured meeting notes and is therefore difficult to reuse.
+The proposed network addresses two forms of fragmentation.
 
-A regional platform can add value without centralizing all genomic data. Population cohorts can provide ancestry-aware frequency observations, clinical programs can contribute phenotype-rich evidence, and expert panels can expose their reasoning and uncertainty. Structured provenance allows reviewers to understand why assessments differ. A side-by-side interface can show, for example, that one panel applied a population criterion using a local database while another considered phenotype specificity or segregation evidence. This is more informative than displaying only final labels.
+The first is analytical fragmentation. Different genome builds, transcript sets, annotation versions, frequency resources and filtering strategies can produce different candidate lists from the same underlying data. A harmonized exchange format cannot remove every local difference, but it can make each decision reproducible and comparable. The system should preserve filter reasons and lower-ranked candidates so that a variant excluded by one workflow can be examined by another.
 
-The architecture also supports future learning systems. A corpus of reviewed evidence decisions could be used to evaluate evidence-retrieval methods, identify common sources of disagreement, and assist experts with prior similar reviews. Such use requires careful separation between training data and evaluation cases, transparent model behavior, and continuous human oversight.
+The second is knowledge fragmentation. Expert reasoning is frequently retained in local reports, spreadsheets, presentations or meeting notes. A final label alone is difficult to reuse because it does not show which evidence was accepted, which was rejected and which assumptions were applied. Structured review objects can make this reasoning visible while preserving uncertainty.
 
-The project should avoid presenting itself as a single Asian clinical authority. National and institutional autonomy, local regulation, and differences in available evidence must remain visible. The network's academic role is to make reasoning more interoperable and reusable while helping participants learn from each other.
+Regional collaboration is particularly useful when evidence types are complementary. Population cohorts contribute ancestry-aware frequency and recurrence information. Clinical programs contribute phenotype, segregation, functional and longitudinal information. Connecting these resources can improve evidence visibility without requiring centralization of raw genomes.
+
+The network must also manage disagreement constructively. Different classifications may result from different disease contexts, transcripts, evidence dates, local frequency resources or institutional policies. A side-by-side interface should expose these causes. A single merged classification would conceal useful information and could imply an authority that the project does not possess.
+
+Automation can reduce repetitive work, but it can also make errors appear systematic and authoritative. The design therefore requires source-linked proposals, versioned algorithms and explicit human acceptance. Language models should be evaluated as retrieval and summarization aids, not as independent expert reviewers.
+
+The proposed architecture is compatible with a federated future. An initial shared ExpertBoard instance may be practical for prototyping, while later deployments could retain separate national or institutional instances and exchange approved knowledge objects. GA4GH identity, access and data-use standards provide possible building blocks, but governance agreements and local accountability remain essential.
 
 # Limitations
 
 This report has several limitations.
 
-First, the architecture has not yet been evaluated using a defined benchmark set. The proposed reduction to 10-20 candidates and detailed review of approximately three variants are workflow targets rather than validated thresholds.
+First, it summarizes work in progress during a hackathon. Some requirements and workflow descriptions require confirmation after the final wrap-up and by representatives of the relevant institutions.
 
-Second, the current ExpertBoard implementation is an experimental prototype and is not a certified medical device or accredited clinical reporting system. Its security, usability, auditability, and decision-support behavior require formal evaluation.
+Second, no benchmark dataset was used to measure candidate retention or compare complete pipelines. The targets of 10-20 prioritized variants and approximately three variants for detailed board discussion are workflow goals, not validated clinical thresholds.
 
-Third, the project has not yet established a common representation for all relevant variant types. Small variants are the initial focus, while copy-number variants, structural variants, repeat expansions, mitochondrial variants, mosaicism, and complex alleles may require additional workflows.
+Third, the current ExpertBoard application is experimental. Authentication, reviewer actions, consensus finalization and complete audit behavior are not yet implemented or validated for clinical use.
 
-Fourth, ACMG/AMP criteria require disease-, gene-, and mechanism-specific refinement. A generic implementation can organize evidence but cannot guarantee a correct classification.
+Fourth, the initial workflow focuses mainly on small germline variants. Copy-number variants, structural variants, repeat expansions, mitochondrial variants, mosaicism and complex alleles require additional representation and evidence logic.
 
-Fifth, no multicountry panel exercise has yet measured agreement, disagreement, review time, or the incremental value of regional frequency data. Legal, ethical, consent, language, sustainability, and attribution models also remain to be defined.
+Fifth, ACMG/AMP-style criteria require gene-, disease- and mechanism-specific specifications. A generic system can organize evidence but cannot guarantee that a criterion or strength is appropriate.
+
+Sixth, the provisional regional comparison is neither exhaustive nor an official statement of national policy. Resource availability, access procedures, guidelines and regulations change over time.
+
+Seventh, de-identification does not eliminate re-identification risk in rare disease. Extremely rare variants and distinctive phenotype combinations may identify a person or family even without conventional identifiers.
 
 # Future work
 
-The next phase will proceed through incremental, testable milestones.
+The next phase should proceed through measurable milestones.
 
-1. **Workflow inventory and common profile.** Document annotation, normalization, transcript selection, quality, frequency, inheritance, phenotype, and disease-gene filters used by participating institutions.
-2. **Benchmark comparison.** Run synthetic, public, or appropriately de-identified cases through participating workflows and compare candidate retention, rank, runtime, and explanations.
-3. **Prioritization-to-review interface.** Define a machine-readable package for transferring candidate variants and provenance into ExpertBoard.
-4. **Structured evidence model.** Represent evidence items, ACMG/AMP-style criteria, source versions, reviewer actions, uncertainty, and superseding assessments.
-5. **Panel comparison interface.** Display country- and institution-specific reviews side by side, including shared and differing evidence, without forcing consensus.
-6. **Federated deployment model.** Evaluate separate national or institutional ExpertBoard instances with a controlled exchange of variant knowledge objects and aggregated queries.
-7. **Governance framework.** Define access tiers, consent requirements, data-use terms, attribution, withdrawal, correction, and responsibility for downstream reuse.
-8. **Prospective pilot.** Conduct a multicountry pilot with expert panels from Japan, Singapore, India, and other interested locations, followed by evaluation of usability, concordance, turnaround time, and evidence reuse.
-9. **Sustainability and community building.** Establish maintainership, documentation, training materials, contribution processes, and a neutral academic governance structure.
+1. **Finalize the common requirements.** Confirm the workflow, country descriptions, case lifecycle, roles and publication terminology with all contributors.
+2. **Create a workflow inventory.** Document genome build, normalization, transcript selection, quality, population, inheritance, phenotype and disease-gene filters used by participating groups.
+3. **Run a reproducible comparison.** Use synthetic, public or appropriately governed cases to compare candidate retention, ranking, runtime and explanations.
+4. **Define the prioritization-to-review package.** Establish a machine-readable schema for variants, phenotypes, evidence proposals, provenance and filter history.
+5. **Implement ExpertBoard review actions.** Add authentication, comments, individual positions, structured evidence editing, chair finalization, conflict detection and audit logging.
+6. **Integrate phenotype review.** Support HPO-term provenance, accept/reject/pending states, missing-information prompts and PubCaseFinder-based disease or case suggestions.
+7. **Implement panel comparison.** Display panel-specific evidence and conclusions side by side and identify the sources of concordance and discordance.
+8. **Design governed knowledge exchange.** Define access tiers, de-identification review, attribution, correction, withdrawal, permitted use and licensing.
+9. **Evaluate federated deployment.** Compare a shared pilot instance with separate institutional instances using standardized identity and knowledge exchange.
+10. **Conduct a multicountry pilot.** Measure usability, turnaround time, candidate retention, reviewer agreement, evidence reuse and the effect of regional population resources.
+11. **Develop sustainability and training.** Establish maintainers, contribution rules, documentation, example cases and training for reviewers and developers.
 
 # Software and data availability
 
@@ -329,23 +394,29 @@ The ExpertBoard prototype is available at:
 
 - https://github.com/PubCaseFinder/expertboard
 
-The manuscript source, figures, and the exact location of any hackathon comparison datasets should be placed in a dedicated publication repository before submission. Patient-derived data must not be included unless sharing is explicitly approved.
+The final BioHackrXiv manuscript source, figures and any reproducible benchmark materials should be maintained in a dedicated public repository with an explicit license. Patient-derived data must not be deposited unless sharing has been approved under the applicable consent, ethics and institutional requirements.
 
 # Acknowledgements
 
-We thank the organizers, hosts, sponsors, and participants of MedHackathon Asia 2026, held in Singapore from 27-31 July 2026. We particularly thank the members of Team 3: Variant Team for discussions on rare disease workflows, population resources, expert review, and regional collaboration.
+We thank the organizers, local hosts, sponsors and participants of MedHackathon Asia 2026, held at Begonia Pavilion, Downtown East, Singapore, from 27-31 July 2026. We thank the members of the variant, phenotype and system-design workstreams for contributing requirements, examples and implementation discussions.
 
-The descriptions of country and institutional workflows in this report reflect hackathon discussions and do not represent the official position or standard practice of any country, institution, clinical laboratory, or national genome initiative.
+The descriptions of countries, institutions and resources in this report reflect informal hackathon discussions. They do not represent official national policy, clinical standards or the formal position of any organization.
 
 # Author contributions
 
 **Conceptualization:** TO BE COMPLETED.  
 **Software:** TO BE COMPLETED.  
-**Methodology:** TO BE COMPLETED.  
-**Investigation and discussion:** TO BE COMPLETED.  
+**Methodology and requirements analysis:** TO BE COMPLETED.  
+**Variant workstream:** TO BE COMPLETED.  
+**Phenotype workstream:** TO BE COMPLETED.  
+**System-design workstream:** TO BE COMPLETED.  
 **Visualization:** TO BE COMPLETED.  
 **Writing - original draft:** TO BE COMPLETED.  
 **Writing - review and editing:** All authors.
+
+# Ethics statement
+
+No new patient-level research analysis is reported in this manuscript. Any future use of patient-derived genomic or clinical information must follow applicable consent, ethics-review, privacy, security and institutional requirements.
 
 # Competing interests
 

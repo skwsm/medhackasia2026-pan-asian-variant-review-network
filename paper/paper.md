@@ -9,7 +9,7 @@ tags:
   - Asia
 authors:
   - name: Toyofumi Fujiwara
-    orcid: 
+    orcid: 0000-0002-0170-9172
     affiliation: 1
   - name: George Devasia
     orcid: 
@@ -18,16 +18,16 @@ authors:
     orcid: 
     affiliation: 3
   - name: Vasanthan Jayakumar
-    orcid: 
+    orcid: 0000-0002-6067-4184
     affiliation: 4
   - name: Yuko Kitano 
     orcid: 
     affiliation: 5
   - name: Yosuke Kawai
-    orcid: 
+    orcid: 0000-0003-0666-1224
     affiliation: 1
   - name: Shuichi Kawashima
-    orcid:
+    orcid: 0000-0001-7883-3756
     affiliation: 1
   - name: Francis A. Tablizo
     orcid: 

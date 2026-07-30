@@ -1,6 +1,6 @@
 ---
-title: "Toward Collaborative Rare Disease Variant Review Across Asia: A MedHackathon Asia 2026 Framework for Variant Prioritization, Expert Interpretation, and Knowledge Sharing"
-title_short: "MedHackathon Asia 2026: collaborative variant review"
+title: "Building a Collaborative Rare Disease Variant Review Network Across Asia at MedHackathon Asia 2026"
+title_short: "MedHackathon Asia 2026: pan-asian-variant-review-network"
 tags:
   - rare disease
   - variant interpretation

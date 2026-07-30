@@ -35,6 +35,9 @@ authors:
   - name: Shoichiro Takahashi
     orcid: 
     affiliation: 8
+  - name: Piyakrit Wongboonchai
+    orcid: 
+    affiliation: 9
 affiliations:
   - name: National Institute of Genetics, Japan
     index: 1
@@ -50,8 +53,10 @@ affiliations:
     index: 6
   - name: University of the Philippines
     index: 7
-  - name: Trinet Corporation, JAPAN
+  - name: Trinet Corporation, Japan
     index: 8
+  - name: Genomic Medicine Centre, Department of Medical Sciences, Ministry of Public Health Thailand
+    index: 9
 date: "31 July 2026"
 cito-bibliography: paper.bib
 event: "MedHackathonAsia2026"

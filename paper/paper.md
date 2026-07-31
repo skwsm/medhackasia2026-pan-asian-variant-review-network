@@ -30,14 +30,14 @@ authors:
     orcid: 
     affiliation: 5
   - name: Francis A. Tablizo
-    orcid: 
+    orcid: 0009-0007-1392-3671
     affiliation: 6
   - name: Shoichiro Takahashi
     orcid: 
-    affiliation: 8
+    affiliation: 7
   - name: Piyakrit Wongboonchai
     orcid: 
-    affiliation: 9
+    affiliation: 8
 affiliations:
   - name: National Institute of Genetics, Japan
     index: 1
@@ -49,14 +49,12 @@ affiliations:
     index: 4
   - name: BITS.Co.,Ltd. 
     index: 5
-  - name: Philippine Genome Center
+  - name: Philippine Genome Center, University of the Philippines
     index: 6
-  - name: University of the Philippines
-    index: 7
   - name: Trinet Corporation, Japan
-    index: 8
+    index: 7
   - name: Genomic Medicine Centre, Department of Medical Sciences, Ministry of Public Health Thailand
-    index: 9
+    index: 8
 date: "31 July 2026"
 cito-bibliography: paper.bib
 event: "MedHackathonAsia2026"

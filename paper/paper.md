@@ -14,8 +14,8 @@ authors:
   - name: George Devasia
     orcid: 
     affiliation: 2
-  - name: Rutharra Ghayadthri
-    orcid: 
+  - name: Rutharra Ghayadthri Manisekaran
+    orcid: 0009-0008-6310-9974
     affiliation: 3
   - name: Vasanthan Jayakumar
     orcid: 0000-0002-6067-4184

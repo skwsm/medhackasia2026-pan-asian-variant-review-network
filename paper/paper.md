@@ -20,15 +20,15 @@ authors:
   - name: Vasanthan Jayakumar
     orcid: 0000-0002-6067-4184
     affiliation: 4
-  - name: Yuko Kitano 
-    orcid: 
-    affiliation: 5
   - name: Yosuke Kawai
     orcid: 0000-0003-0666-1224
     affiliation: 1
   - name: Shuichi Kawashima
     orcid: 0000-0001-7883-3756
     affiliation: 1
+  - name: Yuko Kitano 
+    orcid: 
+    affiliation: 5
   - name: Francis A. Tablizo
     orcid: 
     affiliation: 6

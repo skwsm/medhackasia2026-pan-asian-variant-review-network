@@ -45,7 +45,7 @@ affiliations:
     index: 2
   - name: National Cancer Centre Singapore
     index: 3
-  - name: Kitasato University, Japan
+  - name: School of Frontier Engineering, Kitasato University, Sagamihara, Japan
     index: 4
   - name: BITS.Co.,Ltd. 
     index: 5
